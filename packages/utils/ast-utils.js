@@ -507,6 +507,62 @@ function parseMerge(j, ast, value, action) {
 		return ast;
 	}
 }
+
+/**
+ *
+ * Recursively updates an object/property to a node
+ * @param {any} j — jscodeshift API
+ * @param {Node} p - AST node
+ * @param {String} key - key of a key/val object
+ * @param {Any} value - Any type of object
+ * @returns {Node} - the updated ast
+ */
+
+function updateProperty(j, p, key, value) {
+	if (!p) {
+		return;
+	}
+	let valForNode;
+	if (Array.isArray(value)) {
+		let arrExp = j.arrayExpression([]);
+		if (safeTraverse(p, [
+			"value",
+			"value",
+		]) && p.value.value.type === "ArrayExpression") {
+			arrExp = p.value.value;
+		}
+		value.forEach(val => {
+			addProperty(j, arrExp, null, val);
+		});
+		valForNode = arrExp;
+	} else if (
+		typeof value === "object" &&
+		!(value.__paths || value instanceof RegExp)
+	) {
+		let objectExp = j.objectExpression([]);
+		if (safeTraverse(p, [
+			"value",
+			"value",
+		]) && p.value.value.type === "ObjectExpression") {
+			objectExp = p.value.value;
+		}
+		// object -> loop through it
+		Object.keys(value).forEach(prop => {
+			addProperty(j, objectExp, prop, value[prop]);
+		});
+		valForNode = objectExp;
+	} else {
+		valForNode = createIdentifierOrLiteral(j, value);
+	}
+	let pushVal;
+	if (key) {
+		pushVal = j.property("init", j.identifier(key), valForNode);
+	} else {
+		pushVal = valForNode;
+	}
+	return pushVal;
+}
+
 module.exports = {
 	safeTraverse,
 	createProperty,
@@ -524,5 +580,6 @@ module.exports = {
 	getRequire,
 	addProperty,
 	parseTopScope,
-	parseMerge
+	parseMerge,
+	updateProperty,
 };

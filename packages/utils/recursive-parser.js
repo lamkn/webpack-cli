@@ -2,41 +2,54 @@
 
 const utils = require("./ast-utils");
 
-module.exports = function recursiveTransform(j, ast, key, value, action) {
+module.exports = function recursiveTransform(j, ast, value, action, key) {
 	if (key === "topScope") {
 		return utils.parseTopScope(j, ast, value, action);
 	} else if (key === "merge") {
 		return utils.parseMerge(j, ast, value, action);
 	}
 	const node = utils.findRootNodesByName(j, ast, key);
+
+	// get module.exports prop
+	const root = ast
+		.find(j.ObjectExpression)
+		.filter(p => {
+			return (
+				utils.safeTraverse(p, [
+					"parentPath",
+					"value",
+					"left",
+					"object",
+					"name"
+				]) === "module" &&
+				utils.safeTraverse(p, [
+					"parentPath",
+					"value",
+					"left",
+					"property",
+					"name"
+				]) === "exports"
+			);
+		})
+		.filter(p => p.value.properties);
+
 	if (node.size() !== 0) {
-		// push to existing key
-		return ast;
+		// select node with existing key
+		return utils.findRootNodesByName(
+			j, root, key
+		)
+			.forEach(p => {
+				if (action === "add") {
+				// update property/replace
+					j(p).replaceWith(
+						utils.updateProperty(j, p, key, value)
+					);
+				}
+			});
 	} else {
-		// get module.exports prop
-		const root = ast
-			.find(j.ObjectExpression)
-			.filter(p => {
-				return (
-					utils.safeTraverse(p, [
-						"parentPath",
-						"value",
-						"left",
-						"object",
-						"name"
-					]) === "module" &&
-					utils.safeTraverse(p, [
-						"parentPath",
-						"value",
-						"left",
-						"property",
-						"name"
-					]) === "exports"
-				);
-			})
-			.filter(p => p.value.properties);
 		return root.forEach(p => {
 			if (value) {
+				// init, add new property
 				utils.addProperty(j, p, key, value);
 			}
 		});
